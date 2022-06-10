@@ -3,5 +3,9 @@
 Requirements: keras=2.2.4, tf=1.14.0
 
 SGD: Sparse structure selection based on the simple SGD
+
 PSGD: Sparse structure selectionbased on ISTA 
+
 FastPSGD: Sparse structure selection based on FISTA, its convergence speed is faster than that of PSGD
+
+future works: AMP+ADMM for Sparse structure selectio
