@@ -1,0 +1,83 @@
+from keras.engine.topology import Layer
+from keras.engine.topology import InputSpec
+import keras.backend as K
+from keras import initializers
+from keras import regularizers
+from keras.regularizers import l1
+import numpy as np
+
+
+def SoftSign(W, threshold):
+    W = np.sign(W)*np.maximum(abs(W)-threshold, 0)
+    return W
+
+def HardSign(W, threshold):
+    W1 = np.sign(W-threshold)
+    W2 = np.sign(W+threshold)
+    W = (W1+W2)/2
+    return W
+
+scale = 1
+mu = 1e-5
+class ComplexSparsityRegularization(Layer):
+    def __init__(self, l1=0.01, threshold=0.5, **kwargs):
+        if K.image_dim_ordering() == 'tf':
+            self.axis = -1
+        else:
+            self.axis = 1
+        self.l1 = l1
+        self.threshold = threshold
+        super(ComplexSparsityRegularization, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        dim = input_shape[self.axis]
+        if dim is None:
+            raise ValueError('Axis ' + str(self.axis) + ' of '
+                             'input tensor should have a defined dimension '
+                             'but the layer received an input with shape ' +
+                             str(input_shape) + '.')
+        self.input_spec = InputSpec(ndim=len(input_shape),
+                                    axes={self.axis: dim})
+        self.gamma = self.add_weight(shape=(dim,),
+                                     initializer = 'Ones',#initial,
+                                     name='gamma',
+                                     regularizer=regularizers.get(l1(l=self.l1)),
+                                     trainable=True
+                                     )
+
+        super(ComplexSparsityRegularization, self).build(input_shape)
+        Weights = K.get_value(self.weights[0])
+        Weights[np.shape(Weights)[0]//2:] = Weights[:np.shape(Weights)[0]//2]
+        self.fullPrecisionWeights = Weights
+        BinaryWeights = HardSign(Weights, self.threshold)
+        self.lastIterationWeights = BinaryWeights.copy()
+        K.set_value(self.weights[0], BinaryWeights)
+
+
+    def on_batch_end(self):
+        Weights = K.get_value(self.weights[0])
+        weightsUpdate = Weights - self.lastIterationWeights
+        self.fullPrecisionWeights += weightsUpdate
+        temp= self.fullPrecisionWeights
+        temp[np.shape(temp)[0]//2:] = temp[:np.shape(temp)[0]//2]
+        temp = np.clip(temp, -1, 1)
+        scale = 1/(np.max(abs(temp)))
+        newfullPrecisionWeights = temp * scale
+        self.fullPrecisionWeights = newfullPrecisionWeights
+
+        BinaryWeights = HardSign(newfullPrecisionWeights, self.threshold)
+        self.lastIterationWeights = BinaryWeights.copy()
+        K.set_value(self.weights[0], BinaryWeights)
+
+    def call(self, inputs, mask=None):
+        return inputs * self.gamma
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+    def get_config(self):
+        config = {
+            'l1': self.l1
+        }
+        base_config = super(ComplexSparsityRegularization, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
