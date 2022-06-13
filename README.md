@@ -1,4 +1,4 @@
-# An-Efficient-Specific-Emitter-Identification-Method-Based-on-Complex-Valued-Neural-Network-and-Network-Compression
+# Radio-Frequency-Fingerprinting: An-Efficient-Specific-Emitter-Identification-Method-Based-on-Complex-Valued-Neural-Network-and-Network-Compression
 
 Requirements: keras=2.2.4, tf=1.14.0
 
